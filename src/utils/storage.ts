@@ -2,10 +2,74 @@
 
 import { GrievanceLetter, GrievanceStatus, AuthorityRole, TimelineEvent } from '@/types/grievance';
 import { INITIAL_GRIEVANCES } from '@/data/initialGrievances';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, subscribeToGrievancesRealtime } from '@/lib/supabase';
 
 const STORAGE_KEY = 'parathipetty_grievances_v1';
 const EVENT_NAME = 'parathipetty_data_changed';
+
+// Synchronize Supabase record shape with client GrievanceLetter
+function mapSupabaseRowToGrievance(row: any): GrievanceLetter {
+  return {
+    id: row.id || `grv-${row.tracking_number}`,
+    trackingNumber: row.tracking_number,
+    submittedAt: row.submitted_at || row.created_at || new Date().toISOString(),
+    updatedAt: row.updated_at || new Date().toISOString(),
+    slaDeadline: row.sla_deadline,
+    district: row.district,
+    districtMl: row.district_ml || row.district,
+    panchayat: row.panchayat,
+    panchayatMl: row.panchayat_ml || row.panchayat,
+    wardNumber: Number(row.ward_number),
+    wardName: row.ward_name || `Ward ${row.ward_number}`,
+    addressedToRole: row.addressed_to_role,
+    addressedToName: row.addressed_to_name,
+    addressedDepartment: row.addressed_department,
+    citizenName: row.citizen_name,
+    citizenPhone: row.citizen_phone,
+    citizenEmail: row.citizen_email,
+    citizenAddress: row.citizen_address,
+    citizenAadhaarLast4: row.citizen_aadhaar_last4,
+    category: row.category,
+    categoryMl: row.category_ml || row.category,
+    subject: row.subject,
+    description: row.description,
+    urgency: row.urgency,
+    locationLandmark: row.location_landmark,
+    formalLetterText: row.formal_letter_text || row.description,
+    attachments: row.attachments || [],
+    status: row.status,
+    currentAssigneeName: row.current_assignee_name,
+    currentAssigneeRole: row.current_assignee_role,
+    resolutionSummary: row.resolution_summary,
+    resolvedAt: row.resolved_at,
+    actionTakenReport: row.action_taken_report,
+    timeline: [
+      {
+        id: `tl-sub-${row.tracking_number}`,
+        timestamp: row.submitted_at || new Date().toISOString(),
+        status: 'SUBMITTED',
+        actorRole: 'CITIZEN',
+        actorName: row.citizen_name,
+        title: 'Petition Registered',
+        titleMl: 'പരാതി പോർട്ടലിൽ സമർപ്പിച്ചു',
+        comment: `Petition officially entered into LSGD grievance ledger under token ${row.tracking_number}.`,
+      },
+      ...(row.status !== 'SUBMITTED' ? [{
+        id: `tl-ack-${row.tracking_number}`,
+        timestamp: row.updated_at || new Date().toISOString(),
+        status: row.status as GrievanceStatus,
+        actorRole: row.current_assignee_role as AuthorityRole,
+        actorName: row.current_assignee_name,
+        title: `Progressed to ${row.status}`,
+        titleMl: 'സ്റ്റാറ്റസ് പുതുക്കി',
+        comment: row.resolution_summary || 'Action taken by designated Panchayat authority.',
+      }] : [])
+    ],
+    citizenSatisfaction: row.citizen_satisfaction,
+    citizenRating: row.citizen_rating,
+    citizenFeedbackText: row.citizen_feedback_text,
+  };
+}
 
 export function getStoredGrievances(): GrievanceLetter[] {
   if (typeof window === 'undefined') {
@@ -16,12 +80,62 @@ export function getStoredGrievances(): GrievanceLetter[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_GRIEVANCES));
+      fetchGrievancesFromSupabase();
       return INITIAL_GRIEVANCES;
     }
     const parsed = JSON.parse(raw);
+    fetchGrievancesFromSupabase();
     return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_GRIEVANCES;
   } catch (e) {
-    console.error('Error reading grievances from localStorage:', e);
+    console.error('Error reading grievances:', e);
+    return INITIAL_GRIEVANCES;
+  }
+}
+
+// Background sync from live Supabase PostgreSQL
+let isFetchingFromSupabase = false;
+async function fetchGrievancesFromSupabase() {
+  if (isFetchingFromSupabase || !isSupabaseConfigured || !supabase || typeof window === 'undefined') return;
+  isFetchingFromSupabase = true;
+
+  try {
+    const { data, error } = await supabase
+      .from('grievances')
+      .select('*')
+      .order('submitted_at', { ascending: false });
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      const mapped = data.map(mapSupabaseRowToGrievance);
+      const local = getLocalCache();
+      
+      // Merge: keep local timeline details if richer, update status from Supabase
+      const merged = mapped.map(remoteItem => {
+        const localMatch = local.find(l => l.trackingNumber.toUpperCase() === remoteItem.trackingNumber.toUpperCase());
+        if (localMatch && localMatch.timeline && localMatch.timeline.length > remoteItem.timeline.length) {
+          return {
+            ...remoteItem,
+            timeline: localMatch.timeline,
+          };
+        }
+        return remoteItem;
+      });
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      window.dispatchEvent(new Event(EVENT_NAME));
+    }
+  } catch (err) {
+    console.warn('Supabase background fetch notice:', err);
+  } finally {
+    isFetchingFromSupabase = false;
+  }
+}
+
+function getLocalCache(): GrievanceLetter[] {
+  if (typeof window === 'undefined') return INITIAL_GRIEVANCES;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : INITIAL_GRIEVANCES;
+  } catch {
     return INITIAL_GRIEVANCES;
   }
 }
@@ -97,7 +211,7 @@ export function createNewGrievance(payload: Omit<GrievanceLetter, 'id' | 'tracki
   const updated = [newGrievance, ...current];
   saveGrievances(updated);
 
-  // If Supabase is connected, sync asynchronously
+  // Sync to Live Supabase PostgreSQL
   if (isSupabaseConfigured && supabase) {
     supabase.from('grievances').insert({
       tracking_number: trackingNumber,
@@ -128,6 +242,7 @@ export function createNewGrievance(payload: Omit<GrievanceLetter, 'id' | 'tracki
       sla_deadline: slaDate.toISOString(),
     }).then(({ error }) => {
       if (error) console.warn('Supabase sync notice:', error.message);
+      else console.log('Successfully saved to live Supabase cloud database!');
     });
   }
 
@@ -188,7 +303,7 @@ export function updateGrievanceStatus(
   all[index] = updatedItem;
   saveGrievances(all);
 
-  // If Supabase is connected, sync asynchronously
+  // Update in live Supabase PostgreSQL
   if (isSupabaseConfigured && supabase) {
     supabase.from('grievances').update({
       status: params.newStatus,
@@ -198,6 +313,7 @@ export function updateGrievanceStatus(
       action_taken_report: updatedItem.actionTakenReport,
     }).eq('tracking_number', trackingNumber).then(({ error }) => {
       if (error) console.warn('Supabase status update notice:', error.message);
+      else console.log('Successfully updated status in live Supabase cloud database!');
     });
   }
 
@@ -245,6 +361,20 @@ export function forwardGrievance(
 
   all[index] = updatedItem;
   saveGrievances(all);
+
+  // Sync to Supabase
+  if (isSupabaseConfigured && supabase) {
+    supabase.from('grievances').update({
+      status: 'FORWARDED',
+      current_assignee_name: targetOfficer.name,
+      current_assignee_role: targetOfficer.role,
+      addressed_department: targetOfficer.department,
+      updated_at: now,
+    }).eq('tracking_number', trackingNumber).then(({ error }) => {
+      if (error) console.warn('Supabase forwarding notice:', error.message);
+    });
+  }
+
   return updatedItem;
 }
 
@@ -274,6 +404,18 @@ export function addCitizenFeedback(
   });
 
   saveGrievances(all);
+
+  // Sync feedback to Supabase
+  if (isSupabaseConfigured && supabase) {
+    supabase.from('grievances').update({
+      citizen_satisfaction: satisfaction,
+      citizen_rating: rating,
+      citizen_feedback_text: feedbackText,
+    }).eq('tracking_number', trackingNumber).then(({ error }) => {
+      if (error) console.warn('Supabase feedback notice:', error.message);
+    });
+  }
+
   return true;
 }
 
