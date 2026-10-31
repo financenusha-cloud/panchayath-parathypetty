@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSession, signOut } from 'next-auth/react';
 import { KeralaEmblem } from './KeralaEmblem';
 import { 
   FileEdit, 
@@ -12,12 +13,17 @@ import {
   Menu, 
   X, 
   PhoneCall, 
-  RotateCcw 
+  RotateCcw,
+  LogIn,
+  LogOut,
+  User,
+  FolderOpen
 } from 'lucide-react';
 import { resetToDemoData } from '@/utils/storage';
 
 export function Navbar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navLinks = [
@@ -55,7 +61,7 @@ export function Navbar() {
               className="flex items-center gap-1 text-[10px] text-kerala-100 hover:text-white bg-kerala-950/60 px-2 py-0.5 rounded border border-kerala-700 hover:border-gold-400 transition"
             >
               <RotateCcw className="w-2.5 h-2.5" />
-              <span className="hidden sm:inline">Reset Demo Data</span>
+              <span className="hidden sm:inline">Reset Demo</span>
             </button>
           </div>
         </div>
@@ -122,10 +128,64 @@ export function Navbar() {
                 </Link>
               );
             })}
+
+            {/* User Session Menu */}
+            {session?.user ? (
+              <div className="ml-3 pl-3 border-l border-slate-200 flex items-center gap-2">
+                {session.user.userType === 'CITIZEN' ? (
+                  <Link
+                    href="/my-petitions"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-900 border border-emerald-300 text-xs font-bold hover:bg-emerald-100 transition"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>My Petitions</span>
+                  </Link>
+                ) : (
+                  <Link
+                    href="/authority"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-900 border border-amber-300 text-xs font-bold hover:bg-amber-100 transition"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
+                    <span>{session.user.role || 'Officer'}</span>
+                  </Link>
+                )}
+
+                <button
+                  onClick={() => signOut({ callbackUrl: '/' })}
+                  title="Sign Out"
+                  className="p-2 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="ml-3 flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs font-bold hover:bg-slate-50 transition"
+              >
+                <LogIn className="w-3.5 h-3.5 text-slate-500" />
+                <span>Sign In (ലോഗിൻ)</span>
+              </Link>
+            )}
           </nav>
 
           {/* Mobile Menu Button */}
-          <div className="flex items-center lg:hidden">
+          <div className="flex items-center lg:hidden gap-2">
+            {session?.user ? (
+              <button
+                onClick={() => signOut({ callbackUrl: '/' })}
+                className="p-2 rounded-lg text-slate-600 hover:text-rose-600"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                className="px-2.5 py-1.5 rounded-lg bg-kerala-900 text-white text-xs font-bold"
+              >
+                Sign In
+              </Link>
+            )}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 focus:outline-none"
@@ -140,6 +200,13 @@ export function Navbar() {
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
         <div className="lg:hidden border-t border-slate-200 bg-white px-4 pt-3 pb-5 space-y-1 shadow-lg animate-in slide-in-from-top-2 duration-200">
+          {session?.user && (
+            <div className="p-3 mb-2 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+              <span className="font-bold text-slate-900">{session.user.name}</span>
+              <span className="font-semibold text-kerala-800">{session.user.userType}</span>
+            </div>
+          )}
+
           {navLinks.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;

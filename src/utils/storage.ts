@@ -2,6 +2,7 @@
 
 import { GrievanceLetter, GrievanceStatus, AuthorityRole, TimelineEvent } from '@/types/grievance';
 import { INITIAL_GRIEVANCES } from '@/data/initialGrievances';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const STORAGE_KEY = 'parathipetty_grievances_v1';
 const EVENT_NAME = 'parathipetty_data_changed';
@@ -96,6 +97,40 @@ export function createNewGrievance(payload: Omit<GrievanceLetter, 'id' | 'tracki
   const updated = [newGrievance, ...current];
   saveGrievances(updated);
 
+  // If Supabase is connected, sync asynchronously
+  if (isSupabaseConfigured && supabase) {
+    supabase.from('grievances').insert({
+      tracking_number: trackingNumber,
+      district: payload.district,
+      district_ml: payload.districtMl,
+      panchayat: payload.panchayat,
+      panchayat_ml: payload.panchayatMl,
+      ward_number: payload.wardNumber,
+      ward_name: payload.wardName,
+      addressed_to_role: payload.addressedToRole,
+      addressed_to_name: payload.addressedToName,
+      addressed_department: payload.addressedDepartment,
+      citizen_name: payload.citizenName,
+      citizen_phone: payload.citizenPhone,
+      citizen_email: payload.citizenEmail,
+      citizen_address: payload.citizenAddress,
+      citizen_aadhaar_last4: payload.citizenAadhaarLast4,
+      category: payload.category,
+      category_ml: payload.categoryMl,
+      subject: payload.subject,
+      description: payload.description,
+      urgency: payload.urgency,
+      location_landmark: payload.locationLandmark,
+      formal_letter_text: payload.formalLetterText,
+      status: 'ACKNOWLEDGED',
+      current_assignee_name: payload.currentAssigneeName,
+      current_assignee_role: payload.currentAssigneeRole,
+      sla_deadline: slaDate.toISOString(),
+    }).then(({ error }) => {
+      if (error) console.warn('Supabase sync notice:', error.message);
+    });
+  }
+
   return newGrievance;
 }
 
@@ -152,6 +187,20 @@ export function updateGrievanceStatus(
 
   all[index] = updatedItem;
   saveGrievances(all);
+
+  // If Supabase is connected, sync asynchronously
+  if (isSupabaseConfigured && supabase) {
+    supabase.from('grievances').update({
+      status: params.newStatus,
+      updated_at: now,
+      resolved_at: params.newStatus === 'RESOLVED' ? now : item.resolvedAt,
+      resolution_summary: params.resolutionSummary || item.resolutionSummary,
+      action_taken_report: updatedItem.actionTakenReport,
+    }).eq('tracking_number', trackingNumber).then(({ error }) => {
+      if (error) console.warn('Supabase status update notice:', error.message);
+    });
+  }
+
   return updatedItem;
 }
 
@@ -207,7 +256,7 @@ export function addCitizenFeedback(
 ): boolean {
   const all = getStoredGrievances();
   const index = all.findIndex(g => g.trackingNumber.toUpperCase() === trackingNumber.trim().toUpperCase());
-  if (index === -1) return null as unknown as boolean;
+  if (index === -1) return false;
 
   const item = all[index];
   item.citizenSatisfaction = satisfaction;
