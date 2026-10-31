@@ -5,13 +5,15 @@ import { AuthorityRole } from '@/types/grievance';
 
 export const authOptions: NextAuthOptions = {
   providers: [
-    // 1. Citizen / Civilian Login Provider
+    // 1. Citizen / Civilian Login & Signup Provider
     CredentialsProvider({
       id: 'citizen-login',
       name: 'Citizen Login',
       credentials: {
         phone: { label: 'Phone Number', type: 'text', placeholder: '+91 94470 XXXXX' },
         name: { label: 'Citizen Name', type: 'text', placeholder: 'K. Suresh Kumar' },
+        panchayat: { label: 'Panchayat', type: 'text' },
+        wardNumber: { label: 'Ward Number', type: 'text' },
       },
       async authorize(credentials) {
         if (!credentials?.phone || !credentials?.name) {
@@ -20,6 +22,8 @@ export const authOptions: NextAuthOptions = {
 
         const phone = credentials.phone.trim();
         const name = credentials.name.trim();
+        const panchayat = credentials.panchayat?.trim() || 'Venganoor Grama Panchayat';
+        const wardNumber = credentials.wardNumber ? Number(credentials.wardNumber) : 7;
 
         return {
           id: `citizen-${phone.replace(/\D/g, '') || Date.now()}`,
@@ -27,13 +31,13 @@ export const authOptions: NextAuthOptions = {
           email: `${phone.replace(/\D/g, '')}@citizen.lsgkerala.gov.in`,
           userType: 'CITIZEN' as const,
           phone: phone,
-          panchayat: 'Venganoor Grama Panchayat',
-          wardNumber: 7,
+          panchayat: panchayat,
+          wardNumber: wardNumber,
         };
       },
     }),
 
-    // 2. Panchayat Officer / Admin Login Provider
+    // 2. Panchayat Officer / Admin Login & Signup Provider
     CredentialsProvider({
       id: 'admin-login',
       name: 'Authority Login',
@@ -41,6 +45,8 @@ export const authOptions: NextAuthOptions = {
         officerRole: { label: 'Authority Role', type: 'text' },
         employeeCode: { label: 'Employee Code (PEN)', type: 'text' },
         password: { label: 'Password', type: 'password' },
+        name: { label: 'Officer Name', type: 'text' },
+        panchayat: { label: 'Panchayat', type: 'text' },
       },
       async authorize(credentials) {
         if (!credentials?.officerRole) {
@@ -49,16 +55,18 @@ export const authOptions: NextAuthOptions = {
 
         const targetRole = credentials.officerRole as AuthorityRole;
         const officer = AUTHORITY_ROLES.find(o => o.role === targetRole) || AUTHORITY_ROLES[1];
+        const officialName = credentials.name?.trim() || officer.defaultOfficialEn;
+        const panchayatName = credentials.panchayat?.trim() || 'Grama Panchayat Headquarters';
 
         return {
-          id: `officer-${targetRole.toLowerCase()}`,
-          name: officer.defaultOfficialEn,
+          id: `officer-${targetRole.toLowerCase()}-${Date.now().toString().slice(-4)}`,
+          name: officialName,
           email: `${targetRole.toLowerCase()}@lsgkerala.gov.in`,
           userType: 'OFFICER' as const,
           role: targetRole,
           designationEn: officer.nameEn,
           designationMl: officer.nameMl,
-          panchayat: 'Grama Panchayat Headquarters',
+          panchayat: panchayatName,
           phone: '+91 471 2345678',
         };
       },

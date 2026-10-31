@@ -159,13 +159,21 @@ export function Navbar() {
                 </button>
               </div>
             ) : (
-              <Link
-                href="/login"
-                className="ml-3 flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs font-bold hover:bg-slate-50 transition"
-              >
-                <LogIn className="w-3.5 h-3.5 text-slate-500" />
-                <span>Sign In (ലോഗിൻ)</span>
-              </Link>
+              <div className="ml-3 flex items-center gap-2">
+                <Link
+                  href="/login"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-300 text-slate-800 text-xs font-bold hover:bg-slate-50 transition"
+                >
+                  <LogIn className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Sign In (ലോഗിൻ)</span>
+                </Link>
+                <Link
+                  href="/signup"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-kerala-800 hover:bg-kerala-700 text-white text-xs font-bold shadow-sm transition"
+                >
+                  <span>Sign Up (രജിസ്റ്റർ)</span>
+                </Link>
+              </div>
             )}
           </nav>
 
@@ -179,12 +187,20 @@ export function Navbar() {
                 <LogOut className="w-5 h-5" />
               </button>
             ) : (
-              <Link
-                href="/login"
-                className="px-2.5 py-1.5 rounded-lg bg-kerala-900 text-white text-xs font-bold"
-              >
-                Sign In
-              </Link>
+              <div className="flex items-center gap-1.5">
+                <Link
+                  href="/login"
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-300 text-slate-800 text-xs font-bold"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/signup"
+                  className="px-2.5 py-1.5 rounded-lg bg-kerala-900 text-white text-xs font-bold"
+                >
+                  Sign Up
+                </Link>
+              </div>
             )}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}

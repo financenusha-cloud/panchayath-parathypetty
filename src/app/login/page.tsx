@@ -3,6 +3,7 @@
 import React, { useState, Suspense } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { KeralaEmblem } from '@/components/KeralaEmblem';
 import { AUTHORITY_ROLES } from '@/data/keralaData';
 import { AuthorityRole } from '@/types/grievance';
@@ -270,6 +271,13 @@ function LoginContent() {
                 </button>
               </div>
             </div>
+
+            <div className="pt-4 border-t border-slate-100 text-center text-xs text-slate-600">
+              New citizen resident?{' '}
+              <Link href="/signup?type=CITIZEN" className="font-bold text-kerala-800 hover:text-kerala-950 underline">
+                Sign Up here (രജിസ്റ്റർ ചെയ്യുക)
+              </Link>
+            </div>
           </div>
         )}
 
@@ -396,6 +404,13 @@ function LoginContent() {
                   <p className="text-[10px] text-purple-800">Smt. Priya Chandran</p>
                 </button>
               </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-100 text-center text-xs text-slate-600">
+              New Panchayat Official?{' '}
+              <Link href="/signup?type=OFFICER" className="font-bold text-kerala-800 hover:text-kerala-950 underline">
+                Officer Onboarding (രജിസ്റ്റർ ചെയ്യുക)
+              </Link>
             </div>
           </div>
         )}
